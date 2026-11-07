@@ -40,8 +40,8 @@ pub fn generate_self_signed() -> anyhow::Result<SelfSignedCert> {
         .map_err(|_| anyhow::anyhow!("RSA private key encoding failed"))?;
     let public_der = AsDer::<PublicKeyX509Der>::as_der(private_key.public_key())
         .map_err(|_| anyhow::anyhow!("RSA public key encoding failed"))?;
-    let private_key_pem = pem::encode(&pem::Pem::new("PRIVATE KEY", private_der.as_ref().to_vec()));
-    let public_key_pem = pem::encode(&pem::Pem::new("PUBLIC KEY", public_der.as_ref().to_vec()));
+    let private_key_pem = pem::encode_config(&pem::Pem::new("PRIVATE KEY", private_der.as_ref().to_vec()), pem::EncodeConfig::new().set_line_ending(pem::LineEnding::LF));
+    let public_key_pem = pem::encode_config(&pem::Pem::new("PUBLIC KEY", public_der.as_ref().to_vec()), pem::EncodeConfig::new().set_line_ending(pem::LineEnding::LF));
     let key_pair = rcgen::KeyPair::try_from(private_der.as_ref())?;
     let mut params = rcgen::CertificateParams::default();
     params.distinguished_name = rcgen::DistinguishedName::new();
