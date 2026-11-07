@@ -30,31 +30,30 @@ pub struct SelfSignedCert {
 /// - Validity is rcgen's default (1975 to 4096), so certificates do not expire
 ///   in practice and never need to be rotated for time reasons.
 pub fn generate_self_signed() -> anyhow::Result<SelfSignedCert> {
-    use rsa::pkcs8::{EncodePrivateKey, EncodePublicKey, LineEnding};
+    use aws_lc_rs::encoding::{AsDer, Pkcs8V1Der, PublicKeyX509Der};
+    use aws_lc_rs::rsa::{KeyPair, KeySize};
+    use aws_lc_rs::signature::KeyPair as _;
 
-    let mut rng = rsa::rand_core::OsRng;
-    let private_key = rsa::RsaPrivateKey::new(&mut rng, 2048)?;
-    let private_key_pem = private_key.to_pkcs8_pem(LineEnding::LF)?;
-    let public_key_pem = private_key
-        .to_public_key()
-        .to_public_key_pem(LineEnding::LF)?;
-
-    let key_pair = rcgen::KeyPair::try_from(private_key.to_pkcs8_der()?.as_bytes())?;
+    let private_key = KeyPair::generate(KeySize::Rsa2048)
+        .map_err(|_| anyhow::anyhow!("RSA key generation failed"))?;
+    let private_der = AsDer::<Pkcs8V1Der>::as_der(&private_key)
+        .map_err(|_| anyhow::anyhow!("RSA private key encoding failed"))?;
+    let public_der = AsDer::<PublicKeyX509Der>::as_der(private_key.public_key())
+        .map_err(|_| anyhow::anyhow!("RSA public key encoding failed"))?;
+    let private_key_pem = pem::encode(&pem::Pem::new("PRIVATE KEY", private_der.as_ref().to_vec()));
+    let public_key_pem = pem::encode(&pem::Pem::new("PUBLIC KEY", public_der.as_ref().to_vec()));
+    let key_pair = rcgen::KeyPair::try_from(private_der.as_ref())?;
     let mut params = rcgen::CertificateParams::default();
     params.distinguished_name = rcgen::DistinguishedName::new();
-    params
-        .distinguished_name
-        .push(rcgen::DnType::CommonName, "LocalSend User");
+    params.distinguished_name.push(rcgen::DnType::CommonName, "LocalSend User");
     let certificate = params.self_signed(&key_pair)?;
-
     Ok(SelfSignedCert {
-        private_key_pem: private_key_pem.to_string(),
+        private_key_pem,
         public_key_pem,
         certificate_pem: certificate.pem(),
         fingerprint: fingerprint_from_cert_der(certificate.der()),
     })
 }
-
 pub fn verify_cert_from_pem(cert: String, public_key: Option<&str>) -> anyhow::Result<()> {
     let (cert_pem, _) = Pem::read(Cursor::new(cert.into_bytes()))?;
     let parsed_cert: X509Certificate = cert_pem.parse_x509()?;
