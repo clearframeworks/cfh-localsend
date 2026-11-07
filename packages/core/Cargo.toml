@@ -21,7 +21,7 @@ percent-encoding = { version = "2.3.2", optional = true }
 rcgen = { version = "0.14.8", default-features = false, features = ["crypto", "pem", "ring"], optional = true }
 reqwest = { version = "0.13.4", features = ["charset", "http2", "json", "rustls-no-provider", "stream"], default-features = false, optional = true }
 rand = "0.10.2"
-rsa = { version = "0.9.10", features = ["sha2"], optional = true }
+aws-lc-rs = { version = "1.18.1", optional = true }
 rustls = { version = "0.23.43", default-features = false, features = ["ring", "tls12", "std"], optional = true }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
@@ -53,7 +53,7 @@ required-features = ["http"]
 
 [features]
 default = []
-crypto = ["ed25519-dalek", "rcgen", "rsa", "sha2", "tokio-util"]
+crypto = ["ed25519-dalek", "rcgen", "aws-lc-rs", "pem", "sha2", "tokio-util"]
 discovery = ["http", "multicast"]
 http = ["crypto", "form_urlencoded", "http-body-util", "hyper", "hyper-util", "if-addrs", "pem", "percent-encoding", "reqwest", "rustls", "socket2", "time", "tokio-rustls", "tokio-util", "x509-parser"]
 multicast = ["if-addrs", "socket2", "tokio-util"]
