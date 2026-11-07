@@ -87,6 +87,20 @@ class _HomePageState extends State<HomePage> with Refena {
         final droppedDirectories = event.files.where((file) => Directory(file.path).existsSync()).toList();
         final droppedFiles = event.files.where((file) => !Directory(file.path).existsSync()).toList();
 
+        if (droppedDirectories.isNotEmpty) {
+          final approved = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Add folders to your selection?'),
+              content: Text('Folders can contain private files. Review the selection before sending. Add ${droppedDirectories.length} folder(s)?'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add folders')),
+              ],
+            ),
+          );
+          if (approved != true) return;
+        }
         for (final directory in droppedDirectories) {
           await ref.redux(selectedSendingFilesProvider).dispatchAsync(AddDirectoryAction(directory.path));
         }
@@ -119,7 +133,7 @@ class _HomePageState extends State<HomePage> with Refena {
                             children: [
                               SizedBox(height: 20),
                               Text(
-                                'LocalSend',
+                                'CFH Share',
                                 style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                                 textAlign: TextAlign.center,
                               ),
