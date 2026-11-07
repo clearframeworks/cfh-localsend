@@ -1,0 +1,28 @@
+name: Apply reviewed CFH dependency lock update
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify candidate and apply preview lockfile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current=$(gh api repos/clearframeworks/cfh-localsend/git/ref/heads/cfh-share --jq .object.sha)
+          test "$current" = 51fac3f2233012ba7476cb54d0bb1a0b4da23916 || { echo 'Candidate changed; refusing update'; exit 1; }
+          gh run download 42379309164 --repo clearframeworks/cfh-localsend --name cfh-cargo-lock-preview --dir "$RUNNER_TEMP/lock"
+          export LOCK_SHA=$(gh api 'repos/clearframeworks/cfh-localsend/contents/Cargo.lock?ref=cfh-share' --jq .sha)
+          python3 - <<'PY'
+          import os, json, base64
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'lock'/'Cargo.lock'
+          data={'message':'Update vulnerable Rust dependencies','branch':'cfh-share','sha':os.environ['LOCK_SHA'],'content':base64.b64encode(p.read_bytes()).decode()}
+          (Path(os.environ['RUNNER_TEMP'])/'payload.json').write_text(json.dumps(data))
+          PY
+          gh api --method PUT repos/clearframeworks/cfh-localsend/contents/Cargo.lock --input "$RUNNER_TEMP/payload.json" --jq '.commit.sha'
