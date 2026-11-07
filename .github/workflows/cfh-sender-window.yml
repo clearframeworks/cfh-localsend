@@ -1,0 +1,107 @@
+name: CFH Share sender window diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  transfer:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch exact build and verify hash
+        timeout-minutes: 3
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $run = gh api repos/clearframeworks/cfh-localsend/actions/runs/42387509277 | ConvertFrom-Json
+          if ($run.head_sha -ne '61a36b00ab0f561edb51b7b89a2d31a3d3190c10' -or $run.conclusion -ne 'success') { throw 'Build identity or outcome mismatch' }
+          gh run download 42387509277 --repo clearframeworks/cfh-localsend --name cfh-share-windows-installer-unsigned --dir "$env:RUNNER_TEMP\installer"
+          if ($LASTEXITCODE -ne 0) { throw 'Installer artifact download failed' }
+          Get-FileHash "$env:RUNNER_TEMP\installer\CFH-Share-Setup.exe" -Algorithm SHA256 | Format-List
+      - name: Install exact artifact
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installDir = "$env:RUNNER_TEMP\app"
+          $setup = "$env:RUNNER_TEMP\installer\CFH-Share-Setup.exe"
+          $p = Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$installDir") -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or !(Test-Path "$installDir\localsend_app.exe")) { throw 'Installer failed' }
+          $dest = "$env:RUNNER_TEMP\received"
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          @{ 'flutter.ls_version'=3; 'flutter.ls_quick_save'='on'; 'flutter.ls_https'=$false; 'flutter.ls_destination'=$dest } | ConvertTo-Json -Compress | Set-Content "$env:RUNNER_TEMP\app\settings.json" -Encoding utf8
+      - name: Transfer a harmless file to the running app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = Start-Process "$env:RUNNER_TEMP\app\localsend_app.exe" -PassThru
+          try {
+            $ready = $false
+            for ($i=0; $i -lt 60; $i++) {
+              if ($app.HasExited) { throw 'App exited before server became ready' }
+              try { $info = Invoke-RestMethod 'http://127.0.0.1:53317/api/localsend/v2/info' -TimeoutSec 2; $ready = $true; break } catch { Start-Sleep -Seconds 1 }
+            }
+            if (-not $ready) { throw 'App receive endpoint did not become ready' }
+            $bytes = [Text.Encoding]::UTF8.GetBytes('CFH isolated transfer verification')
+            $sha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+            $body = @{info=@{alias='CFH test sender';version='2.0';deviceModel='Runner';deviceType='desktop';fingerprint='cfh-test-sender';port=53318;protocol='http';download=$false};files=@{testfile=@{id='testfile';fileName='cfh-test.txt';size=$bytes.Length;fileType='text/plain';sha256=$sha}}} | ConvertTo-Json -Depth 8 -Compress
+            $response = Invoke-RestMethod -Uri 'http://127.0.0.1:53317/api/localsend/v2/prepare-upload' -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 30
+            if (-not $response.sessionId -or -not $response.files.testfile) { throw 'No transfer session or token' }
+            $uri = "http://127.0.0.1:53317/api/localsend/v2/upload?sessionId=$($response.sessionId)&fileId=testfile&token=$($response.files.testfile)"
+            $null = Invoke-WebRequest -Uri $uri -Method Post -ContentType 'application/octet-stream' -Body $bytes -TimeoutSec 30
+            $file = "$env:RUNNER_TEMP\received\cfh-test.txt"
+            if (-not (Test-Path $file)) { throw 'Received file missing' }
+            $actual = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $sha) { throw 'Received file hash mismatch' }
+            Write-Output "TRANSFER VERIFIED SHA256 $actual"
+          } finally { if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force } }
+
+      - name: Capture sender window on disposable runner
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixture = "$env:RUNNER_TEMP\sender-fixture.txt"
+          [IO.File]::WriteAllText($fixture,'cfh sender test')
+          $app = Start-Process "$env:RUNNER_TEMP\app\localsend_app.exe" -ArgumentList "`"$fixture`"" -PassThru
+          try {
+            Start-Sleep -Seconds 15
+            if ($app.HasExited) { throw 'Sender exited' }
+            Add-Type -AssemblyName UIAutomationClient
+            Add-Type -AssemblyName System.Drawing
+            $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id)
+            $window = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children,$condition)
+            if (-not $window) { throw 'No UI automation window' }
+            $hwnd = [IntPtr]$window.Current.NativeWindowHandle
+            Add-Type -TypeDefinition @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class WindowCapture {
+              [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+              [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+              [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+          }
+          "@
+            $rect = New-Object WindowCapture+Rect
+            if (-not [WindowCapture]::GetWindowRect($hwnd,[ref]$rect)) { throw 'Cannot inspect window bounds' }
+            $width = $rect.Right - $rect.Left; $height = $rect.Bottom - $rect.Top
+            Write-Output "WINDOW dimensions=$width x $height"
+            if ($width -le 0 -or $height -le 0) { throw 'Window has no size' }
+            $bitmap = New-Object System.Drawing.Bitmap $width,$height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $hdc = $graphics.GetHdc()
+            $ok = [WindowCapture]::PrintWindow($hwnd,$hdc,2)
+            $graphics.ReleaseHdc($hdc)
+            if (-not $ok) { throw 'PrintWindow failed' }
+            $bitmap.Save("$env:RUNNER_TEMP\sender-window.png",[System.Drawing.Imaging.ImageFormat]::Png)
+            $graphics.Dispose(); $bitmap.Dispose()
+          } finally { if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force } }
+      - name: Preserve disposable diagnostic screenshot
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: sender-window-diagnostic
+          path: ${{ runner.temp }}\sender-window.png
+          retention-days: 1
