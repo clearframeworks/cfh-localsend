@@ -1,0 +1,25 @@
+name: Inspect isolated sender screen
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  ocr:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Retrieve diagnostic screenshot on runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh run download 42378559052 --repo clearframeworks/cfh-localsend --name cfh-sender-test-screen --dir "$env:RUNNER_TEMP\screen"
+          if ($LASTEXITCODE -ne 0) { throw 'Screenshot retrieval failed' }
+      - name: OCR screen locally on runner
+        shell: pwsh
+        run: |
+          $tesseract = Get-Command tesseract -ErrorAction SilentlyContinue
+          if (-not $tesseract) { throw 'Tesseract is not installed on this runner' }
+          & $tesseract.Source "$env:RUNNER_TEMP\screen\sender-screen.png" stdout
+          if ($LASTEXITCODE -ne 0) { throw 'OCR failed' }
