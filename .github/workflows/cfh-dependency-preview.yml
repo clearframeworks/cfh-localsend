@@ -14,7 +14,7 @@ jobs:
           persist-credentials: false
       - name: Update Cargo dependencies within declared constraints
         run: |
-          for package in rustls@0.23.43 rustls-webpki@0.103.13 tokio@1.53.1 h2@0.4.15 lru@0.18.1 webpki-root-certs@1.0.9 webpki-roots@1.0.9; do
+          for package in rustls rustls-webpki tokio h2 lru webpki-root-certs webpki-roots; do
             cargo update -p "$package"
           done
       - name: Examine Windows application dependency paths
