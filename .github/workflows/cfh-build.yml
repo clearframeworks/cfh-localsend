@@ -132,6 +132,9 @@ jobs:
           $dir = "$env:RUNNER_TEMP\cfh-installed"
           $p = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dir") -Wait -PassThru
           if ($p.ExitCode -ne 0 -or !(Test-Path "$dir\localsend_app.exe")) { throw "Installation failed" }
+          foreach ($notice in @('LICENSE','CFH-FORK.md','THIRD_PARTY\README.md','THIRD_PARTY\aws-lc-rs\LICENSE','THIRD_PARTY\aws-lc-sys\LICENSE','THIRD_PARTY\aws-lc\LICENSE','THIRD_PARTY\aws-lc\NOTICE','THIRD_PARTY\aws-lc\third_party\fiat\LICENSE','THIRD_PARTY\aws-lc\third_party\s2n-bignum\LICENSE')) {
+            if (!(Test-Path (Join-Path $dir $notice))) { throw "Installed notice missing: $notice" }
+          }
           $app = Start-Process -FilePath "$dir\localsend_app.exe" -PassThru
           Start-Sleep -Seconds 10
           if ($app.HasExited) { throw "Application exited during startup" }
