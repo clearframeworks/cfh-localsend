@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: 3ed78c1f69bea5f848633df797fb602c79a79af6
+          ref: b2dc5b6d2c344f8748c11147d45916e0a5ba13f4
           persist-credentials: false
       - name: Exercise app core sender and receiver with local signaling
         shell: bash
@@ -60,6 +60,7 @@ jobs:
               Ok(())
           }
           RS
+          cargo test -p localsend --features full malformed_short_tokens_are_rejected_without_panic
           cargo build -p server
           SERVER_IP=127.0.0.1 SERVER_PORT=3000 target/debug/server > "$RUNNER_TEMP/signaling.log" 2>&1 &
           server_pid=$!
