@@ -1,0 +1,16 @@
+name: Trace CFH Share RSA use
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 0e715f9ca535f4272af1d2389ddee5d1d16941dc
+          persist-credentials: false
+      - name: Trace RSA usage in first-party Rust code
+        run: rg -n 'rsa::|RsaPrivateKey|Pkcs1v15Encrypt|Oaep|\.decrypt\(' packages/core packages/localsend_isolates/rust
