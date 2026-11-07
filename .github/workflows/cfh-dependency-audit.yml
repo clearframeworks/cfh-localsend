@@ -15,4 +15,5 @@ jobs:
       - name: Install OSV Scanner 2.7.0
         run: go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.0
       - name: Audit dependencies
-        run: "$(go env GOPATH)/bin/osv-scanner" scan source --recursive .
+        run: |
+          "$(go env GOPATH)/bin/osv-scanner" scan source --recursive .
