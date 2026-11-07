@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: 72286345b3f4a5413f6e1a23bee7525422817d5f
+          ref: 79a72722744cfda69b2064c2512e77e84cf59b4f
           persist-credentials: false
       - name: Test RSA-PSS interoperability and certificate behavior
         shell: bash
@@ -37,6 +37,7 @@ jobs:
           RS
           cargo test -p localsend --features full --test cfh_rsa_interop
           cargo test -p localsend --features full crypto::
+          cargo test -p localsend --features full --test v2_tls_pinning
           cargo tree --target x86_64-pc-windows-msvc -p rust_lib_localsend_app -i rsa || true
       - name: Preserve prototype lockfile
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
