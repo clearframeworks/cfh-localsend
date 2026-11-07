@@ -1,0 +1,32 @@
+name: Prepare CFH Share prerelease draft
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Prepare reviewed candidate draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run=$(gh api repos/clearframeworks/cfh-localsend/actions/runs/42387509277 --jq '.head_sha + " " + .conclusion')
+          test "$run" = '61a36b00ab0f561edb51b7b89a2d31a3d3190c10 success'
+          gh run download 42387509277 --repo clearframeworks/cfh-localsend --name cfh-share-windows-installer-unsigned --dir "$RUNNER_TEMP/installer"
+          file="$RUNNER_TEMP/installer/CFH-Share-Setup.exe"
+          echo '853edb67dba6f47384620b2c5c111c5a56ecd360341438590eef78e3064c8273  '"$file" | sha256sum -c -
+          if gh release view cfh-share-0.1.0-rc1 --repo clearframeworks/cfh-localsend >/dev/null 2>&1; then echo 'Release already exists; refusing to replace'; exit 1; fi
+          cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
+          CFH Share is an experimental, free Windows fork of [LocalSend 1.18.2](https://github.com/localsend/localsend), a local-network file transfer app. This preview adds a confirmation before adding dropped folders, rejects malformed tokens, updates WebRTC, and changes the RSA provider. Source: [tested CFH candidate](https://github.com/clearframeworks/cfh-localsend/tree/61a36b00ab0f561edb51b7b89a2d31a3d3190c10). LocalSend and its contributors retain their rights; the Apache 2.0 license, modification notices, and AWS-LC third-party notices are included.
+
+          **Preview limits:** The unsigned installer may trigger a Windows publisher warning. The Windows share-target and startup integration are unavailable in this build. The installed app's receive path was tested on an isolated Windows runner; core WebRTC file transfer, legacy RSA identity interoperability, invalid signatures and TLS fingerprint checks were tested locally. Sending through the installed Windows interface and physical-device transfers have not been verified.
+
+          The dependency scan reports one remaining informational unmaintained-package notice for `pin-utils` in the full Rust lockfile; it was not present in the Windows app dependency tree inspected. Scans cannot guarantee safety.
+
+          Installer SHA-256: `853edb67dba6f47384620b2c5c111c5a56ecd360341438590eef78e3064c8273`.
+          NOTES
+          gh release create cfh-share-0.1.0-rc1 "$file" --repo clearframeworks/cfh-localsend --target 61a36b00ab0f561edb51b7b89a2d31a3d3190c10 --title 'CFH Share 0.1.0 Preview' --notes-file "$RUNNER_TEMP/notes.md" --draft --prerelease
