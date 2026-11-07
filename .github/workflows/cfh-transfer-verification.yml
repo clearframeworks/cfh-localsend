@@ -74,6 +74,10 @@ jobs:
             $root = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
             if (-not $root) { throw 'Application window unavailable to UI automation on hosted runner' }
             $items = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+            Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);' -Name NativeWindow -Namespace CFH
+            [CFH.NativeWindow]::ShowWindow([IntPtr]$root.Current.NativeWindowHandle, 9) | Out-Null
+            [CFH.NativeWindow]::SetForegroundWindow([IntPtr]$root.Current.NativeWindowHandle) | Out-Null
+            Start-Sleep -Seconds 3
             Add-Type -AssemblyName System.Windows.Forms
             Add-Type -AssemblyName System.Drawing
             $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
