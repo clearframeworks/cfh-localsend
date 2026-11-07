@@ -25,7 +25,7 @@ jobs:
           use localsend::crypto::token::generate_key;
           use localsend::model::transfer::FileDto;
           use localsend::webrtc::signaling::{ClientInfoWithoutId, SignalingConnection, WsServerMessage};
-          use localsend::webrtc::webrtc::{accept_offer, send_offer, RTCFile};
+          use localsend::webrtc::webrtc::{accept_offer, send_offer, RTCFile, RTCSendFileResponse};
           fn info(alias: &str) -> ClientInfoWithoutId {
               ClientInfoWithoutId { alias: alias.into(), version: "2.0".into(), device_model: None, device_type: None, token: alias.into() }
           }
@@ -43,7 +43,7 @@ jobs:
                   let send_task = tokio::spawn(async move { send_offer(&sender, vec![], receiver_id, generate_key(), None, None, files, ss, selected_tx, se, sp, pair_tx, sending_rx).await });
                   eprintln!("STAGE awaiting offer"); let offer = loop { match receiver_events.recv().await { Some(WsServerMessage::Offer(offer)) => break offer, Some(event) => eprintln!("SIGNAL EVENT {:?}", event), None => return Err(anyhow::anyhow!("signaling closed")) } }; eprintln!("STAGE received offer");
                   let (rs, _rsrx) = mpsc::channel(32); let (re, _rerx) = mpsc::channel(32); let (rp, _rprx) = mpsc::channel(4);
-                  let (files_tx, files_rx) = oneshot::channel(); let (chosen_tx, chosen_rx) = oneshot::channel(); let (received_tx, mut received_rx) = mpsc::channel(4); let (_user_error_tx, user_error_rx) = mpsc::channel(4);
+                  let (files_tx, files_rx) = oneshot::channel(); let (chosen_tx, chosen_rx) = oneshot::channel(); let (received_tx, mut received_rx) = mpsc::channel(4); let (user_error_tx, user_error_rx) = mpsc::channel(4);
                   let recv_task = tokio::spawn(async move { accept_offer(&receiver, vec![], &offer, generate_key(), None, None, rs, files_tx, chosen_rx, re, rp, received_tx, user_error_rx).await });
                   eprintln!("STAGE waiting file list"); let received_files = files_rx.await?; eprintln!("STAGE got file list"); assert_eq!(received_files.len(), 1);
                   chosen_tx.send(Some(HashSet::from(["file1".to_string()]))).map_err(|_| anyhow::anyhow!("selection failed"))?;
@@ -53,7 +53,7 @@ jobs:
                   data_tx.send(Bytes::from_static(b"cfh-test")).await?; drop(data_tx); drop(sending_tx);
                   eprintln!("STAGE waiting file"); let mut file = received_rx.recv().await.ok_or_else(|| anyhow::anyhow!("missing file"))?;
                   let mut content = Vec::new(); while let Some(chunk) = file.binary_rx.recv().await { content.extend_from_slice(&chunk); }
-                  eprintln!("STAGE received bytes {:?}",content); assert_eq!(content, b"cfh-test");
+                  eprintln!("STAGE received bytes {:?}",content); assert_eq!(content, b"cfh-test"); user_error_tx.send(RTCSendFileResponse { id:"file1".into(), success:true, error:None }).await?;
                   send_task.await??; recv_task.await??;
                   Ok::<(), anyhow::Error>(())
               }).await??;
