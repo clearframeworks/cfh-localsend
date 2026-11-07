@@ -82,6 +82,12 @@ jobs:
           Remove-Item build/windows/x64/runner/Release/localsend_app.exe.manifest
 
       # The SignPath artifact configuration expects "LocalSend-*-windows-*-64.zip" containing "localsend_app.exe"
+      - name: Include upstream and AWS-LC notices
+        shell: pwsh
+        run: |
+          Copy-Item "$env:GITHUB_WORKSPACE\LICENSE" "$env:GITHUB_WORKSPACE\app\build\windows\x64\runner\Release\LICENSE"
+          Copy-Item "$env:GITHUB_WORKSPACE\CFH-FORK.md" "$env:GITHUB_WORKSPACE\app\build\windows\x64\runner\Release\CFH-FORK.md"
+          Copy-Item "$env:GITHUB_WORKSPACE\THIRD_PARTY" "$env:GITHUB_WORKSPACE\app\build\windows\x64\runner\Release\THIRD_PARTY" -Recurse
       - name: Zip compiled files
         working-directory: app
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "LocalSend-${{ needs.build.outputs.version }}-windows-x86-64.zip"
