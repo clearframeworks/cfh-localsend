@@ -10,6 +10,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Fetch exact build and verify hash
+        timeout-minutes: 3
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -17,13 +18,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $run = gh api repos/clearframeworks/cfh-localsend/actions/runs/42376478714 | ConvertFrom-Json
           if ($run.head_sha -ne '51fac3f2233012ba7476cb54d0bb1a0b4da23916' -or $run.conclusion -ne 'success') { throw 'Build identity or outcome mismatch' }
-          gh run download 42376478714 --repo clearframeworks/cfh-localsend --name windows-zip-unsigned --dir "$env:RUNNER_TEMP\portable"
-          if ($LASTEXITCODE -ne 0) { throw 'Portable artifact download failed' }
           gh run download 42376478714 --repo clearframeworks/cfh-localsend --name cfh-share-windows-installer-unsigned --dir "$env:RUNNER_TEMP\installer"
           if ($LASTEXITCODE -ne 0) { throw 'Installer artifact download failed' }
           Get-FileHash "$env:RUNNER_TEMP\installer\CFH-Share-Setup.exe" -Algorithm SHA256 | Format-List
-          $zip = Get-ChildItem "$env:RUNNER_TEMP\portable\*.zip" | Select-Object -First 1
-          if (-not $zip) { throw 'Portable ZIP missing' }
+      - name: Install exact artifact
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = 'Stop'
           $installDir = "$env:RUNNER_TEMP\app"
           $setup = "$env:RUNNER_TEMP\installer\CFH-Share-Setup.exe"
           $p = Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$installDir") -Wait -PassThru
