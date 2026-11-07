@@ -7,8 +7,8 @@ use ed25519_dalek::pkcs8::{
     EncodePublicKey as EdEncodePublicKey,
 };
 use ed25519_dalek::{Signer as EdSigner, Verifier as EdVerifier};
-use rsa::pkcs8::{DecodePublicKey as RsaDecodePublicKey, EncodePublicKey as RsaEncodePublicKey};
-use rsa::signature::Verifier as RsaVerifier;
+use aws_lc_rs::encoding::{AsDer, PublicKeyX509Der};
+use aws_lc_rs::signature::{UnparsedPublicKey, RSA_PSS_2048_8192_SHA256};
 
 pub struct SigningTokenKey {
     inner: ed25519_dalek::SigningKey,
@@ -35,7 +35,7 @@ struct Ed25519VerifyingKey {
 }
 
 struct RsaPssVerifyingKey {
-    inner: rsa::pss::VerifyingKey<rsa::sha2::Sha256>,
+    inner: aws_lc_rs::rsa::PublicKey,
 }
 
 impl VerifyingTokenKey for Ed25519VerifyingKey {
@@ -56,13 +56,13 @@ impl VerifyingTokenKey for Ed25519VerifyingKey {
 
 impl VerifyingTokenKey for RsaPssVerifyingKey {
     fn verify(&self, msg: &[u8], signature: &[u8]) -> anyhow::Result<()> {
-        let signature = rsa::pss::Signature::try_from(signature)?;
-        self.inner.verify(msg, &signature)?;
+        UnparsedPublicKey::new(&RSA_PSS_2048_8192_SHA256, self.inner.as_ref())
+            .verify(msg, signature).map_err(|_| anyhow::anyhow!("Invalid RSA-PSS signature"))?;
         Ok(())
     }
 
     fn to_der(&self) -> anyhow::Result<Vec<u8>> {
-        Ok(self.inner.to_public_key_der()?.into_vec())
+        Ok(AsDer::<PublicKeyX509Der>::as_der(&self.inner).map_err(|_| anyhow::anyhow!("RSA public key encoding failed"))?.as_ref().to_vec())
     }
 
     fn signature_method(&self) -> &'static str {
@@ -105,8 +105,9 @@ pub fn parse_public_key(
         }),
         "rsa-pss" => Box::new(RsaPssVerifyingKey {
             inner: {
-                let public_key = rsa::RsaPublicKey::from_public_key_pem(public_key)?;
-                rsa::pss::VerifyingKey::new(public_key)
+                let parsed = pem::parse(public_key)?;
+                if parsed.tag() != "PUBLIC KEY" { return Err(anyhow::anyhow!("Expected PUBLIC KEY PEM")); }
+                aws_lc_rs::rsa::PublicKey::from_der(parsed.contents()).map_err(|_| anyhow::anyhow!("Invalid RSA public key"))?
             },
         }),
         _ => return Err(anyhow::anyhow!("Unsupported key type")),
