@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: 6f8134c1dc5661884a5fbbedaf41f0fc5cec9ca9
+          ref: 4775bc680a4821f01bf5b06573e73521ee3cd95e
           persist-credentials: false
       - name: Exercise app core sender and receiver with local signaling
         shell: bash
