@@ -32,28 +32,28 @@ jobs:
           #[tokio::test]
           async fn transfers_file_over_webrtc() -> anyhow::Result<()> {
               tokio::time::timeout(Duration::from_secs(60), async {
-                  let sender = SignalingConnection::connect("ws://127.0.0.1:3000/v1/ws", &info("sender")).await?;
-                  let receiver = SignalingConnection::connect("ws://127.0.0.1:3000/v1/ws", &info("receiver")).await?;
-                  let receiver_id = receiver.client.id;
+                  eprintln!("STAGE connecting sender"); let sender = SignalingConnection::connect("ws://127.0.0.1:3000/v1/ws", &info("sender")).await?;
+                  eprintln!("STAGE connecting receiver"); let receiver = SignalingConnection::connect("ws://127.0.0.1:3000/v1/ws", &info("receiver")).await?;
+                  eprintln!("STAGE connected"); let receiver_id = receiver.client.id;
                   let (sender, _sender_events) = sender.start_listener();
                   let (receiver, mut receiver_events) = receiver.start_listener();
                   let (ss, _ssrx) = mpsc::channel(32); let (se, _serx) = mpsc::channel(32); let (sp, _sprx) = mpsc::channel(4);
                   let (selected_tx, selected_rx) = oneshot::channel(); let (pair_tx, _pair_rx) = oneshot::channel(); let (sending_tx, sending_rx) = mpsc::channel(4);
                   let files = vec![FileDto { id:"file1".into(), file_name:"test.txt".into(), size:8, file_type:"text/plain".into(), sha256:None, preview:None, metadata:None }];
                   let send_task = tokio::spawn(async move { send_offer(&sender, vec![], receiver_id, generate_key(), None, None, files, ss, selected_tx, se, sp, pair_tx, sending_rx).await });
-                  let offer = loop { if let Some(WsServerMessage::Offer(offer)) = receiver_events.recv().await { break offer; } };
+                  eprintln!("STAGE awaiting offer"); let offer = loop { match receiver_events.recv().await { Some(WsServerMessage::Offer(offer)) => break offer, Some(event) => eprintln!("SIGNAL EVENT {:?}", event), None => return Err(anyhow::anyhow!("signaling closed")) } }; eprintln!("STAGE received offer");
                   let (rs, _rsrx) = mpsc::channel(32); let (re, _rerx) = mpsc::channel(32); let (rp, _rprx) = mpsc::channel(4);
                   let (files_tx, files_rx) = oneshot::channel(); let (chosen_tx, chosen_rx) = oneshot::channel(); let (received_tx, mut received_rx) = mpsc::channel(4); let (_user_error_tx, user_error_rx) = mpsc::channel(4);
                   let recv_task = tokio::spawn(async move { accept_offer(&receiver, vec![], &offer, generate_key(), None, None, rs, files_tx, chosen_rx, re, rp, received_tx, user_error_rx).await });
-                  let received_files = files_rx.await?; assert_eq!(received_files.len(), 1);
+                  eprintln!("STAGE waiting file list"); let received_files = files_rx.await?; eprintln!("STAGE got file list"); assert_eq!(received_files.len(), 1);
                   chosen_tx.send(Some(HashSet::from(["file1".to_string()]))).map_err(|_| anyhow::anyhow!("selection failed"))?;
-                  assert!(selected_rx.await?.contains("file1"));
+                  eprintln!("STAGE waiting sender selection"); assert!(selected_rx.await?.contains("file1")); eprintln!("STAGE sending bytes");
                   let (data_tx, data_rx) = mpsc::channel(4);
                   sending_tx.send(RTCFile { file_id:"file1".into(), binary_rx:data_rx }).await?;
                   data_tx.send(Bytes::from_static(b"cfh-test")).await?; drop(data_tx); drop(sending_tx);
-                  let mut file = received_rx.recv().await.ok_or_else(|| anyhow::anyhow!("missing file"))?;
+                  eprintln!("STAGE waiting file"); let mut file = received_rx.recv().await.ok_or_else(|| anyhow::anyhow!("missing file"))?;
                   let mut content = Vec::new(); while let Some(chunk) = file.binary_rx.recv().await { content.extend_from_slice(&chunk); }
-                  assert_eq!(content, b"cfh-test");
+                  eprintln!("STAGE received bytes {:?}",content); assert_eq!(content, b"cfh-test");
                   send_task.await??; recv_task.await??;
                   Ok::<(), anyhow::Error>(())
               }).await??;
@@ -63,6 +63,6 @@ jobs:
           cargo build -p server
           SERVER_IP=127.0.0.1 SERVER_PORT=3000 target/debug/server > "$RUNNER_TEMP/signaling.log" 2>&1 &
           server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          trap 'cat "$RUNNER_TEMP/signaling.log"; kill "$server_pid" 2>/dev/null || true' EXIT
           for i in $(seq 1 30); do if curl -s http://127.0.0.1:3000/ >/dev/null; then break; fi; sleep 1; done
           cargo test -p localsend --features full --test cfh_webrtc_transfer -- --nocapture
