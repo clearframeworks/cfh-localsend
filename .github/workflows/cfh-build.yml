@@ -94,3 +94,49 @@ jobs:
           path: app/LocalSend-${{ needs.build.outputs.version }}-windows-x86-64.zip
           if-no-files-found: error
 
+
+      - name: Build CFH installer
+        shell: pwsh
+        run: |
+          $iss = @"
+          [Setup]
+          AppId=CFHShare
+          AppName=CFH Share
+          AppVersion=1.18.2
+          AppPublisher=Coders for Humanity
+          DefaultDirName={localappdata}\Programs\CFH Share
+          DefaultGroupName=CFH Share
+          PrivilegesRequired=lowest
+          OutputDir=$env:RUNNER_TEMP\cfh-installer
+          OutputBaseFilename=CFH-Share-Setup
+          Compression=lzma2
+          SolidCompression=yes
+          [Files]
+          Source: "$env:GITHUB_WORKSPACE\app\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+          [Icons]
+          Name: "{group}\CFH Share"; Filename: "{app}\localsend_app.exe"
+          "@
+          $iss | Set-Content "$env:RUNNER_TEMP\cfh.iss" -Encoding utf8
+          iscc "$env:RUNNER_TEMP\cfh.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Installer build failed" }
+      - name: Smoke test installer
+        shell: pwsh
+        run: |
+          $setup = "$env:RUNNER_TEMP\cfh-installer\CFH-Share-Setup.exe"
+          $dir = "$env:RUNNER_TEMP\cfh-installed"
+          $p = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dir") -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or !(Test-Path "$dir\localsend_app.exe")) { throw "Installation failed" }
+          $app = Start-Process -FilePath "$dir\localsend_app.exe" -PassThru
+          Start-Sleep -Seconds 10
+          if ($app.HasExited) { throw "Application exited during startup" }
+          Stop-Process -Id $app.Id -Force
+          $uninstall = Get-ChildItem "$dir\unins*.exe" | Select-Object -First 1
+          if (-not $uninstall) { throw "Uninstaller missing" }
+          $p = Start-Process -FilePath $uninstall.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Uninstall failed" }
+      - name: Upload CFH installer
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: cfh-share-windows-installer-unsigned
+          path: ${{ runner.temp }}\cfh-installer\CFH-Share-Setup.exe
+          if-no-files-found: error
