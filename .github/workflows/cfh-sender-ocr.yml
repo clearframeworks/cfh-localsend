@@ -12,9 +12,9 @@ jobs:
       - name: Retrieve diagnostic screenshot on runner
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download 42378956127 --repo clearframeworks/cfh-localsend --name cfh-sender-test-screen --dir "$RUNNER_TEMP/screen"
+        run: gh run download 42392825868 --repo clearframeworks/cfh-localsend --name sender-window-diagnostic --dir "$RUNNER_TEMP/screen"
       - name: OCR screen on runner
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq tesseract-ocr
-          tesseract "$RUNNER_TEMP/screen/sender-screen.png" stdout
+          tesseract "$RUNNER_TEMP/screen/sender-window.png" stdout
