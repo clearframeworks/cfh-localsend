@@ -24,7 +24,10 @@ jobs:
           Get-FileHash "$env:RUNNER_TEMP\installer\CFH-Share-Setup.exe" -Algorithm SHA256 | Format-List
           $zip = Get-ChildItem "$env:RUNNER_TEMP\portable\*.zip" | Select-Object -First 1
           if (-not $zip) { throw 'Portable ZIP missing' }
-          Expand-Archive $zip.FullName "$env:RUNNER_TEMP\app"
+          $installDir = "$env:RUNNER_TEMP\app"
+          $setup = "$env:RUNNER_TEMP\installer\CFH-Share-Setup.exe"
+          $p = Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$installDir") -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or !(Test-Path "$installDir\localsend_app.exe")) { throw 'Installer failed' }
           $dest = "$env:RUNNER_TEMP\received"
           New-Item -ItemType Directory -Force $dest | Out-Null
           @{ 'flutter.ls_version'=3; 'flutter.ls_quick_save'='on'; 'flutter.ls_https'=$false; 'flutter.ls_destination'=$dest } | ConvertTo-Json -Compress | Set-Content "$env:RUNNER_TEMP\app\settings.json" -Encoding utf8
