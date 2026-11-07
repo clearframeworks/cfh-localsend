@@ -1,0 +1,45 @@
+name: Preview CFH Share RSA provider migration
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  crypto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 72286345b3f4a5413f6e1a23bee7525422817d5f
+          persist-credentials: false
+      - name: Test RSA-PSS interoperability and certificate behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$RUNNER_TEMP/key.pem" >/dev/null 2>&1
+          openssl pkey -in "$RUNNER_TEMP/key.pem" -pubout -out "$RUNNER_TEMP/public.pem"
+          printf 'cfh-rsa-interoperability' > "$RUNNER_TEMP/message.bin"
+          openssl dgst -sha256 -sign "$RUNNER_TEMP/key.pem" -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:32 -out "$RUNNER_TEMP/signature.bin" "$RUNNER_TEMP/message.bin"
+          cat > packages/core/tests/cfh_rsa_interop.rs <<'RS'
+          #![cfg(feature = "crypto")]
+          use localsend::crypto::token::parse_public_key;
+          #[test]
+          fn verifies_openssl_rsa_pss_and_rejects_tampering() {
+              let root = std::env::var("RUNNER_TEMP").unwrap();
+              let public_key = std::fs::read_to_string(format!("{root}/public.pem")).unwrap();
+              let message = std::fs::read(format!("{root}/message.bin")).unwrap();
+              let mut signature = std::fs::read(format!("{root}/signature.bin")).unwrap();
+              let key = parse_public_key(&public_key, "rsa-pss").unwrap();
+              assert!(key.verify(&message, &signature).is_ok());
+              signature[0] ^= 1;
+              assert!(key.verify(&message, &signature).is_err());
+          }
+          RS
+          cargo test -p localsend --features full --test cfh_rsa_interop
+          cargo test -p localsend --features full crypto::
+          cargo tree --target x86_64-pc-windows-msvc -p rust_lib_localsend_app -i rsa || true
+      - name: Preserve prototype lockfile
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: cfh-rsa-prototype-lock
+          path: Cargo.lock
