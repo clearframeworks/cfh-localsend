@@ -1,0 +1,36 @@
+name: CFH Share dependency remediation preview
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 51fac3f2233012ba7476cb54d0bb1a0b4da23916
+          persist-credentials: false
+      - name: Update Cargo dependencies within declared constraints
+        run: cargo update
+      - name: Examine Windows application dependency paths
+        shell: bash
+        run: |
+          for package in rsa crypto-bigint bincode pin-utils rustls tokio h2 lru rustls-webpki; do
+            echo "==== $package ===="
+            cargo tree --target x86_64-pc-windows-msvc -p rust_lib_localsend_app -i "$package" 2>&1 || true
+          done
+      - name: Show dependency changes
+        run: git diff --stat Cargo.lock && git diff Cargo.lock
+      - name: Install OSV Scanner
+        run: go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.0
+      - name: Audit updated lockfile
+        run: |
+          "$(go env GOPATH)/bin/osv-scanner" scan source -L Cargo.lock
+      - name: Preserve updated lockfile
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: cfh-cargo-lock-preview
+          path: Cargo.lock
