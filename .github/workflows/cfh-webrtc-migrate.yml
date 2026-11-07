@@ -1,0 +1,30 @@
+name: Verify CFH Share WebRTC migration
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 0e715f9ca535f4272af1d2389ddee5d1d16941dc
+          persist-credentials: false
+      - name: Resolve WebRTC update
+        run: cargo update -p webrtc --precise 0.17.3
+      - name: Verify Windows dependency tree
+        run: |
+          cargo tree --target x86_64-pc-windows-msvc -p rust_lib_localsend_app -i crypto-bigint
+          cargo tree --target x86_64-pc-windows-msvc -p rust_lib_localsend_app -i rsa
+      - name: Compile Rust application library
+        run: cargo check -p rust_lib_localsend_app
+      - name: Test transfer core
+        run: cargo test -p localsend --features full --test v2_web_send
+      - name: Preserve migration lockfile
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: cfh-webrtc-migration-lock
+          path: Cargo.lock
+          if-no-files-found: error
