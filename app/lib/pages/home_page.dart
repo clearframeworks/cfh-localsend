@@ -14,6 +14,20 @@ import 'package:localsend_app/util/native/cross_file_converters.dart';
 import 'package:localsend_app/widget/responsive_builder.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
+Future<bool> confirmDroppedFolders(BuildContext context, int folderCount) async {
+  final approved = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Add folders to your selection?'),
+      content: Text('Folders can contain private files. Review the selection before sending. Add $folderCount folder(s)? Cancel drop to discard all files and folders in this drop.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel drop')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add folders')),
+      ],
+    ),
+  );
+  return approved == true;
+}
 enum HomeTab {
   receive(Icons.wifi),
   send(Icons.send),
@@ -88,17 +102,7 @@ class _HomePageState extends State<HomePage> with Refena {
         final droppedFiles = event.files.where((file) => !Directory(file.path).existsSync()).toList();
 
         if (droppedDirectories.isNotEmpty) {
-          final approved = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Add folders to your selection?'),
-              content: Text('Folders can contain private files. Review the selection before sending. Add ${droppedDirectories.length} folder(s)? Cancel drop to discard all files and folders in this drop.'),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel drop')),
-                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add folders')),
-              ],
-            ),
-          );
+          final approved = await confirmDroppedFolders(context, droppedDirectories.length);
           if (approved != true) return;
         }
         for (final directory in droppedDirectories) {
