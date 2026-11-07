@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: 4775bc680a4821f01bf5b06573e73521ee3cd95e
+          ref: 61a36b00ab0f561edb51b7b89a2d31a3d3190c10
           persist-credentials: false
       - name: Test RSA-PSS interoperability and certificate behavior
         shell: bash
