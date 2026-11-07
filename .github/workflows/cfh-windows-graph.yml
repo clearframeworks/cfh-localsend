@@ -1,0 +1,24 @@
+name: Check Windows dependency graph
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  graph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 61a36b00ab0f561edb51b7b89a2d31a3d3190c10
+          persist-credentials: false
+      - name: Inspect Windows app dependency graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo tree --locked --target x86_64-pc-windows-msvc -p rust_lib_localsend_app -e normal,build > "$RUNNER_TEMP/windows-graph.txt"
+          if grep -E '(^|[^[:alnum:]_-])(pin-utils|rsa v|crypto-bigint v0\.5)' "$RUNNER_TEMP/windows-graph.txt"; then
+            echo 'Unexpected flagged dependency present in Windows graph'; exit 1
+          fi
+          grep -E 'aws-lc-rs v|aws-lc-sys v|webrtc v|crypto-bigint v' "$RUNNER_TEMP/windows-graph.txt" | sort -u
+          echo 'WINDOWS GRAPH: pin-utils, rsa crate and crypto-bigint 0.5 absent'
