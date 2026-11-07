@@ -92,9 +92,9 @@ class _HomePageState extends State<HomePage> with Refena {
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('Add folders to your selection?'),
-              content: Text('Folders can contain private files. Review the selection before sending. Add ${droppedDirectories.length} folder(s)?'),
+              content: Text('Folders can contain private files. Review the selection before sending. Add ${droppedDirectories.length} folder(s)? Cancel drop to discard all files and folders in this drop.'),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel drop')),
                 FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add folders')),
               ],
             ),
