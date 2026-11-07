@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: 79a72722744cfda69b2064c2512e77e84cf59b4f
+          ref: 6f8134c1dc5661884a5fbbedaf41f0fc5cec9ca9
           persist-credentials: false
       - name: Test RSA-PSS interoperability and certificate behavior
         shell: bash
@@ -37,6 +37,30 @@ jobs:
           RS
           cargo test -p localsend --features full --test cfh_rsa_interop
           cargo test -p localsend --features full crypto::
+          openssl req -new -x509 -key "$RUNNER_TEMP/key.pem" -out "$RUNNER_TEMP/legacy-cert.pem" -days 1 -subj "/CN=LocalSend User"
+          cat >> packages/core/tests/v2_tls_pinning.rs <<'RS'
+          #[tokio::test]
+          async fn cfh_legacy_rsa_identity_interoperates_both_directions() {
+              let root = std::env::var("RUNNER_TEMP").unwrap();
+              let cert = std::fs::read_to_string(format!("{root}/legacy-cert.pem")).unwrap();
+              let private_key = std::fs::read_to_string(format!("{root}/key.pem")).unwrap();
+              let pem = pem::parse(&cert).unwrap();
+              let legacy = Identity { fingerprint: localsend::crypto::cert::fingerprint_from_cert_der(pem.contents()), cert, private_key };
+              let modern = generate_identity();
+              for (server_identity, sender) in [(&legacy, &modern), (&modern, &legacy)] {
+                  let server = start_tls_server(server_identity).await;
+                  let client = client(sender, Some(&server_identity.fingerprint));
+                  let content = b"legacy-rsa-interop".to_vec();
+                  let files = vec![file_dto("legacy-file", content.len() as u64)];
+                  let result = client.prepare_upload(ProtocolType::Https, "127.0.0.1", server.port, None, prepare_upload_request(sender, &files), None, CancellationToken::new()).await.unwrap();
+                  let response = result.response.unwrap();
+                  let token = response.files.get("legacy-file").unwrap();
+                  let (result, sent) = upload_bytes(&client, server.port, &response.session_id, "legacy-file", token, &content).await;
+                  result.unwrap(); assert_eq!(sent, content.len() as u64);
+                  assert_eq!(server.received.lock().await[0].1, content);
+              }
+          }
+          RS
           cargo test -p localsend --features full --test v2_tls_pinning
           cargo tree --target x86_64-pc-windows-msvc -p rust_lib_localsend_app -i rsa || true
       - name: Preserve prototype lockfile
