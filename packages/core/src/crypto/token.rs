@@ -185,7 +185,7 @@ pub fn verify_token_with_result(
     verify_salt: impl Fn(&[u8]) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() < 5 {
+    if parts.len() != 5 {
         return Err(anyhow::anyhow!("Invalid structure"));
     }
     let [hash_method, hash_base64, salt_base64, sign_method, signature_base64] = parts[0..5] else {
@@ -232,12 +232,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn malformed_short_tokens_are_rejected_without_panic() {
+    fn malformed_tokens_are_rejected_without_panic() {
         let key = generate_key();
         let public_key = key.to_verifying_key();
-        for token in ["", "sha256", "a.b", "a.b.c.d"] {
+        for token in ["", "sha256", "a.b", "a.b.c.d", "a.b.c.d.e.f"] {
             assert!(!verify_token_nonce(&*public_key, token, b"nonce"));
         }
+        let valid = generate_token_nonce(&key, b"nonce").unwrap();
+        assert!(verify_token_nonce(&*public_key, &valid, b"nonce"));
+        assert!(!verify_token_nonce(&*public_key, &format!("{valid}.extra"), b"nonce"));
     }
     #[test]
     fn test_generate_key() {
