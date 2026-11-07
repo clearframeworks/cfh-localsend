@@ -74,6 +74,21 @@ jobs:
             $root = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
             if (-not $root) { throw 'Application window unavailable to UI automation on hosted runner' }
             $items = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bitmap.Save("$env:RUNNER_TEMP\sender-screen.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $graphics.Dispose(); $bitmap.Dispose()
             Write-Output "Sender automation elements: $($items.Count)"
             foreach ($item in $items) { if ($item.Current.Name) { Write-Output ("UI: " + $item.Current.ControlType.ProgrammaticName + ' ' + $item.Current.Name) } }
           } finally { if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force } }
+      - name: Upload remote sender screenshot
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: cfh-sender-test-screen
+          path: ${{ runner.temp }}\sender-screen.png
+          if-no-files-found: error
+          retention-days: 1
