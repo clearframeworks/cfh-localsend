@@ -70,7 +70,17 @@ jobs:
               def log_message(self, fmt, *args):
                   with (root/'receiver.log').open('a', encoding='utf-8') as f: f.write((fmt % args) + '\n')
               def do_POST(self):
-                  body=self.rfile.read(int(self.headers.get('Content-Length','0')))
+                  if self.headers.get('Transfer-Encoding','').lower() == 'chunked':
+                      chunks=[]
+                      while True:
+                          size=int(self.rfile.readline().split(b';',1)[0].strip(),16)
+                          if size == 0:
+                              while self.rfile.readline().strip(): pass
+                              break
+                          chunks.append(self.rfile.read(size)); self.rfile.read(2)
+                      body=b''.join(chunks)
+                  else:
+                      body=self.rfile.read(int(self.headers.get('Content-Length','0')))
                   if self.path.startswith('/api/localsend/v2/register'):
                       response=peer
                   elif self.path.startswith('/api/localsend/v2/prepare-upload'):
