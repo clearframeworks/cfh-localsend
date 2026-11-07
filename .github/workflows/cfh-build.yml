@@ -3,6 +3,9 @@ name: CFH Share Windows build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   FLUTTER_VERSION: "3.41.9"
 
@@ -48,6 +51,12 @@ jobs:
       - name: Dependencies
         working-directory: app
         run: flutter pub get
+
+      - name: Analyze and test
+        working-directory: app
+        run: |
+          flutter analyze
+          flutter test
 
       - name: Compile for Windows
         working-directory: app
