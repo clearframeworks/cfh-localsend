@@ -237,6 +237,9 @@ mod tests {
         for token in ["", "sha256", "a.b", "a.b.c.d", "a.b.c.d.e.f"] {
             assert!(!verify_token_nonce(&*public_key, token, b"nonce"));
         }
+        let valid = generate_token_nonce(&key, b"nonce").unwrap();
+        assert!(verify_token_nonce(&*public_key, &valid, b"nonce"));
+        assert!(!verify_token_nonce(&*public_key, &format!("{valid}.extra"), b"nonce"));
     }
     #[test]
     fn test_generate_key() {
