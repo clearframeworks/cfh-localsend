@@ -1,3 +1,4 @@
+// Modified by Coders for Humanity: CFH Share application title, 2026-11-07.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:localsend_app/config/init.dart';

@@ -1,3 +1,4 @@
+// Modified by Coders for Humanity: RSA verification and token validation, 2026-11-07.
 use crate::crypto::hash;
 use crate::util;
 use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;

@@ -1,3 +1,4 @@
+// Modified by Coders for Humanity: branding and folder-drop confirmation, 2026-11-07.
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';

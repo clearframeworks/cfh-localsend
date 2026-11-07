@@ -1,3 +1,4 @@
+// Modified by Coders for Humanity: RSA identity provider, 2026-11-07.
 use std::io::Cursor;
 use x509_parser::asn1_rs::FromDer;
 use x509_parser::certificate::X509Certificate;

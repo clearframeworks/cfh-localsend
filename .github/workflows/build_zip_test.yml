@@ -1,4 +1,4 @@
-name: CFH Share Windows build
+name: Build windows zip
 
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ jobs:
   build_windows_zip:
     needs: build
     runs-on: windows-latest
-
+    environment: packaging
 
     steps:
       - name: Fix long file paths
@@ -85,3 +85,27 @@ jobs:
           path: app/LocalSend-${{ needs.build.outputs.version }}-windows-x86-64.zip
           if-no-files-found: error
 
+      - name: Sign zip (SignPath)
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: localsend
+          signing-policy-slug: test-signing
+          artifact-configuration-slug: portable
+          github-artifact-id: ${{ steps.unsigned-zip.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed/portable
+
+      - name: Verify signature
+        continue-on-error: true
+        run: |
+          Expand-Archive -Path "signed\portable\LocalSend-${{ needs.build.outputs.version }}-windows-x86-64.zip" -DestinationPath verify-portable
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64\signtool.exe' | Select-Object -Last 1
+          & $signtool.FullName verify /pa /v verify-portable\localsend_app.exe
+
+      - name: Upload signed zip
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-zip-x86-64-result
+          path: signed/portable/LocalSend-${{ needs.build.outputs.version }}-windows-x86-64.zip
