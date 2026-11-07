@@ -1,0 +1,25 @@
+name: Preview CFH Share WebRTC upgrade
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: d2e582d0d67c5beb5e115de0a2e24926b0aed724
+          persist-credentials: false
+      - name: Try maintained WebRTC 0.21.1
+        run: |
+          sed -i 's/webrtc = { version = "0.14.0"/webrtc = { version = "0.21.1"/' packages/core/Cargo.toml
+          grep 'webrtc = { version' packages/core/Cargo.toml
+          cargo update -p webrtc --precise 0.21.1
+      - name: Inspect residual dependency paths
+        run: |
+          cargo tree --target x86_64-pc-windows-msvc -p rust_lib_localsend_app -i crypto-bigint || true
+          cargo tree --target x86_64-pc-windows-msvc -p rust_lib_localsend_app -i rsa || true
+      - name: Check application compatibility
+        run: cargo check -p rust_lib_localsend_app
