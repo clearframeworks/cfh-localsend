@@ -36,6 +36,13 @@ jobs:
           }
           RS
           cargo test -p localsend --features full --test cfh_rsa_interop
+          for bits in 3072 4096; do
+            openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:$bits -out "$RUNNER_TEMP/key.pem" >/dev/null 2>&1
+            openssl pkey -in "$RUNNER_TEMP/key.pem" -pubout -out "$RUNNER_TEMP/public.pem"
+            openssl dgst -sha256 -sign "$RUNNER_TEMP/key.pem" -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:32 -out "$RUNNER_TEMP/signature.bin" "$RUNNER_TEMP/message.bin"
+            echo "Testing legacy RSA-PSS $bits-bit key"
+            cargo test -p localsend --features full --test cfh_rsa_interop
+          done
           cargo test -p localsend --features full crypto::
           openssl req -new -x509 -key "$RUNNER_TEMP/key.pem" -out "$RUNNER_TEMP/legacy-cert.pem" -days 1 -subj "/CN=LocalSend User"
           cat >> packages/core/tests/v2_tls_pinning.rs <<'RS'
