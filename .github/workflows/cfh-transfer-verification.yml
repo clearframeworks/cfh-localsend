@@ -58,3 +58,22 @@ jobs:
             if ($actual -ne $sha) { throw 'Received file hash mismatch' }
             Write-Output "TRANSFER VERIFIED SHA256 $actual"
           } finally { if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force } }
+      - name: Inspect app send controls in isolated session
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixture = "$env:RUNNER_TEMP\sender-test.txt"
+          [IO.File]::WriteAllText($fixture, 'CFH outbound transfer verification')
+          $app = Start-Process "$env:RUNNER_TEMP\app\localsend_app.exe" -ArgumentList "`"$fixture`"" -PassThru
+          try {
+            Start-Sleep -Seconds 15
+            if ($app.HasExited) { throw 'Sender app exited' }
+            Add-Type -AssemblyName UIAutomationClient
+            $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id)
+            $root = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
+            if (-not $root) { throw 'Application window unavailable to UI automation on hosted runner' }
+            $items = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+            Write-Output "Sender automation elements: $($items.Count)"
+            foreach ($item in $items) { if ($item.Current.Name) { Write-Output ("UI: " + $item.Current.ControlType.ProgrammaticName + ' ' + $item.Current.Name) } }
+          } finally { if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force } }
