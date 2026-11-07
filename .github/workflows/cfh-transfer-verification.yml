@@ -16,9 +16,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $run = gh api repos/clearframeworks/cfh-localsend/actions/runs/42376478714 | ConvertFrom-Json
-          if ($run.head_sha -ne '51fac3f2233012ba7476cb54d0bb1a0b4da23916' -or $run.conclusion -ne 'success') { throw 'Build identity or outcome mismatch' }
-          gh run download 42376478714 --repo clearframeworks/cfh-localsend --name cfh-share-windows-installer-unsigned --dir "$env:RUNNER_TEMP\installer"
+          $run = gh api repos/clearframeworks/cfh-localsend/actions/runs/42379633051 | ConvertFrom-Json
+          if ($run.head_sha -ne 'd2e582d0d67c5beb5e115de0a2e24926b0aed724' -or $run.conclusion -ne 'success') { throw 'Build identity or outcome mismatch' }
+          gh run download 42379633051 --repo clearframeworks/cfh-localsend --name cfh-share-windows-installer-unsigned --dir "$env:RUNNER_TEMP\installer"
           if ($LASTEXITCODE -ne 0) { throw 'Installer artifact download failed' }
           Get-FileHash "$env:RUNNER_TEMP\installer\CFH-Share-Setup.exe" -Algorithm SHA256 | Format-List
       - name: Install exact artifact
@@ -58,41 +58,3 @@ jobs:
             if ($actual -ne $sha) { throw 'Received file hash mismatch' }
             Write-Output "TRANSFER VERIFIED SHA256 $actual"
           } finally { if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force } }
-      - name: Inspect app send controls in isolated session
-        shell: pwsh
-        timeout-minutes: 2
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $fixture = "$env:RUNNER_TEMP\sender-test.txt"
-          [IO.File]::WriteAllText($fixture, 'CFH outbound transfer verification')
-          $app = Start-Process "$env:RUNNER_TEMP\app\localsend_app.exe" -ArgumentList "`"$fixture`"" -PassThru
-          try {
-            Start-Sleep -Seconds 15
-            if ($app.HasExited) { throw 'Sender app exited' }
-            Add-Type -AssemblyName UIAutomationClient
-            $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id)
-            $root = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
-            if (-not $root) { throw 'Application window unavailable to UI automation on hosted runner' }
-            $items = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
-            Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);' -Name NativeWindow -Namespace CFH
-            [CFH.NativeWindow]::ShowWindow([IntPtr]$root.Current.NativeWindowHandle, 9) | Out-Null
-            [CFH.NativeWindow]::SetForegroundWindow([IntPtr]$root.Current.NativeWindowHandle) | Out-Null
-            Start-Sleep -Seconds 3
-            Add-Type -AssemblyName System.Windows.Forms
-            Add-Type -AssemblyName System.Drawing
-            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
-            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-            $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-            $bitmap.Save("$env:RUNNER_TEMP\sender-screen.png", [System.Drawing.Imaging.ImageFormat]::Png)
-            $graphics.Dispose(); $bitmap.Dispose()
-            Write-Output "Sender automation elements: $($items.Count)"
-            foreach ($item in $items) { if ($item.Current.Name) { Write-Output ("UI: " + $item.Current.ControlType.ProgrammaticName + ' ' + $item.Current.Name) } }
-          } finally { if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force } }
-      - name: Upload remote sender screenshot
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: cfh-sender-test-screen
-          path: ${{ runner.temp }}\sender-screen.png
-          if-no-files-found: error
-          retention-days: 1
