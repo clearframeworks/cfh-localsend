@@ -1,0 +1,14 @@
+name: Verify public CFH Share prerelease
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download prerelease installer without credentials
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/CFH-Share-Setup.exe" 'https://github.com/clearframeworks/cfh-localsend/releases/download/cfh-share-0.1.0-rc1/CFH-Share-Setup.exe'
+          echo '853edb67dba6f47384620b2c5c111c5a56ecd360341438590eef78e3064c8273  '"$RUNNER_TEMP/CFH-Share-Setup.exe" | sha256sum -c -
