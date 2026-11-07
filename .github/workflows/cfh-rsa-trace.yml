@@ -13,4 +13,4 @@ jobs:
           ref: 0e715f9ca535f4272af1d2389ddee5d1d16941dc
           persist-credentials: false
       - name: Trace RSA usage in first-party Rust code
-        run: rg -n 'rsa::|RsaPrivateKey|Pkcs1v15Encrypt|Oaep|\.decrypt\(' packages/core packages/localsend_isolates/rust
+        run: grep -R -n -E 'rsa::|RsaPrivateKey|Pkcs1v15Encrypt|Oaep|\.decrypt\(' packages/core packages/localsend_isolates/rust
