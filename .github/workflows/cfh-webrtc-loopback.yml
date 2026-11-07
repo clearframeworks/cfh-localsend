@@ -1,0 +1,65 @@
+name: CFH Share WebRTC peer loopback
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  loopback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 3ed78c1f69bea5f848633df797fb602c79a79af6
+          persist-credentials: false
+      - name: Test local WebRTC data channel
+        shell: bash
+        run: |
+          cat > packages/core/tests/cfh_webrtc_loopback.rs <<'RS'
+          #![cfg(feature = "webrtc")]
+          use std::sync::Arc;
+          use std::time::Duration;
+          use tokio::sync::mpsc;
+          use webrtc::api::APIBuilder;
+          use webrtc::data_channel::data_channel_message::DataChannelMessage;
+          use webrtc::data_channel::RTCDataChannel;
+          use webrtc::peer_connection::configuration::RTCConfiguration;
+          #[tokio::test]
+          async fn two_local_peers_exchange_data() -> anyhow::Result<()> {
+              let api = APIBuilder::new().build();
+              let offerer = api.new_peer_connection(RTCConfiguration::default()).await?;
+              let answerer = api.new_peer_connection(RTCConfiguration::default()).await?;
+              let (tx, mut rx) = mpsc::channel::<Vec<u8>>(1);
+              answerer.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
+                  let tx = tx.clone();
+                  Box::pin(async move {
+                      dc.on_message(Box::new(move |msg: DataChannelMessage| {
+                          let tx = tx.clone();
+                          Box::pin(async move { let _ = tx.send(msg.data.to_vec()).await; })
+                      }));
+                  })
+              }));
+              let dc = offerer.create_data_channel("cfh-loopback", None).await?;
+              let send_dc = dc.clone();
+              dc.on_open(Box::new(move || {
+                  let send_dc = send_dc.clone();
+                  Box::pin(async move { send_dc.send_text("cfh-webrtc-test".to_owned()).await.expect("send"); })
+              }));
+              let offer = offerer.create_offer(None).await?;
+              let mut offer_ready = offerer.gathering_complete_promise().await;
+              offerer.set_local_description(offer).await?;
+              let _ = offer_ready.recv().await;
+              answerer.set_remote_description(offerer.local_description().await.expect("offer")).await?;
+              let answer = answerer.create_answer(None).await?;
+              let mut answer_ready = answerer.gathering_complete_promise().await;
+              answerer.set_local_description(answer).await?;
+              let _ = answer_ready.recv().await;
+              offerer.set_remote_description(answerer.local_description().await.expect("answer")).await?;
+              let received = tokio::time::timeout(Duration::from_secs(30), rx.recv()).await?.expect("message");
+              assert_eq!(received, b"cfh-webrtc-test");
+              offerer.close().await?;
+              answerer.close().await?;
+              Ok(())
+          }
+          RS
+          cargo test -p localsend --features full --test cfh_webrtc_loopback -- --nocapture
